@@ -28,11 +28,14 @@ EXAMPLE_JSON = """
 {
     "strings": [
         {
-            "text": "Test",
+            "text": "This is a string",
             "address": "0xC54E10"
         },
         {
-            "text": "Test 2",
+            "text": "This string starts right after the previous string"
+        },
+        {
+            "text": "Strings after this one will be looked for relative to this address (if their address is not given)",
             "address": 12930592
         }
     ]
@@ -190,11 +193,12 @@ def patch_eboot(eboot, patched_eboot, json_file, verbose, update, safe, align_va
     buffer = elf.buffer()
 
     print('Patching strings...')
+    prev_address = -1
     for i in range(len(strings)):
         # a small portion of the string for printing
-        print_string = f'"{strings[i]["text"][:20]}..."'
+        print_string = '"' + strings[i]['text'][:20] + ('..."' if len(strings[i]["text"]) > 20 else '"')
 
-        if (not (strings[i].get('text', None) or strings[i].get('address', None))):
+        if (not strings[i].get('text', None)):
             print(f'Warning: skipped string {i} because the JSON object is invalid: {print_string}')
             continue
 
@@ -205,10 +209,33 @@ def patch_eboot(eboot, patched_eboot, json_file, verbose, update, safe, align_va
                     print(f'Skipped string {i} because it was previously added: {print_string}')
                 continue
 
-        if type(strings[i]['address']) is str:
-            address = int(strings[i]['address'], 0)
+        if strings[i].get('address', None):
+            if type(strings[i]['address']) is str:
+                address = int(strings[i]['address'], 0)
+            else:
+                address = strings[i]['address']
+        elif prev_address == -1:
+            print(f'Skipped string {i} because its address was not given: {print_string}')
+            continue
         else:
-            address = strings[i]['address']
+            # try to get the address by looking for the first null after the previous string
+            address = -1
+            next_address = buffer.find(b'\x00', prev_address)
+            if next_address != -1:
+                # default align size for strings in eboots
+                if next_address % 8:
+                    next_address += 8 - (next_address % 8)
+                else:
+                    next_address += 8
+                
+                if buffer[next_address] != b'\x00':
+                    address = next_address
+
+        if address == -1:
+            print(f'Skipped string {i} because its address was not given and could not be found from the previous string: {print_string}')
+            continue
+
+        prev_address = address
 
         # find the pointer to the old string's address
         pointer = find_pointer(buffer, address, safe)
@@ -285,7 +312,8 @@ def main():
         print('Showing JSON format help:\n')
         print('The JSON file should have only 1 object called "strings", which contains an array of objects,')
         print('each with 2 elements: "text" and "address". "text" is the new string that will replace the old string at "address".')
-        print('"address" must be a valid file offset in the input eboot, and can be either written in hex (as a string) or in decimal.')
+        print('"address" must be a valid file offset in the input eboot, and can be either written in hex (as a string) or in decimal.\n')
+        print('If "address" is not given, the address of the string right after the previous string (aligned to 8 bytes) will be used.')
         print('\nIMPORTANT: if an entry is removed from the JSON after running the script once, a clean EBOOT should be used.')
         print('Otherwise, running the script multiple times on the same EBOOT should not have any side effects.')
         print('\nHere\'s an example:')
