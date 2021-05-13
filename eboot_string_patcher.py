@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 __author__ = 'SutandoTsukai181'
-__version__ = '1.0'
+__version__ = '1.1'
 
 import json
 import os
