@@ -40,6 +40,8 @@ The JSON file should have only 1 object called "strings", which contains an arra
 each with 2 elements: "text" and "address". "text" is the new string that will replace the old string at "address".
 "address" must be a valid file offset in the input eboot, and can be either written in hex (as a string) or in decimal.
 
+If "address" is not given, the address of the string right after the previous string (aligned to 8 bytes) will be used.
+
 IMPORTANT: if an entry is removed from the JSON after running the script once, a clean EBOOT should be used.
 Otherwise, running the script multiple times on the same EBOOT should not have any side effects.
 
@@ -48,11 +50,14 @@ Here's an example:
 {
     "strings": [
         {
-            "text": "Test",
+            "text": "This is a string",
             "address": "0xC54E10"
         },
         {
-            "text": "Test 2",
+            "text": "This string starts right after the previous string"
+        },
+        {
+            "text": "Strings after this one will be looked for relative to this address (if their address is not given)",
             "address": 12930592
         }
     ]
