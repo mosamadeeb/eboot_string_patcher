@@ -29,7 +29,7 @@ optional arguments:
   -j, --json-help       show help info about the JSON file format and exit
   -v, --verbose         show info about each string entry that is patched
   -u, --update          skip adding strings that were added in a previous run (does not check for conflicts)
-  -s, --safe            skip strings if their address was found multiple times (use this whenever the script breaks the eboot)
+  -s, --unsafe          patch strings without checking if their address was found multiple times (might provide a slight performance boost)
   -a ALIGN_VALUE, --align-value ALIGN_VALUE
                         force alignment of the segment before the empty segment to the value given
   -e ENCODING, --encoding ENCODING
