@@ -44,9 +44,11 @@ EXAMPLE_JSON = """
 
 segments: List[Segment] = list()
 program_start = 0
+verbose = False
 
 
 def find_pointer(buf: bytearray, addr: int, unsafe: bool) -> int:
+    global verbose
     result = -1
 
     for seg in segments:
@@ -58,16 +60,31 @@ def find_pointer(buf: bytearray, addr: int, unsafe: bool) -> int:
             while result % 4:
                 result = buf.find(addr.to_bytes(4, 'big'), result + 4)
 
-            if not unsafe and buf.find(addr.to_bytes(4, 'big'), result + 4) != -1:
-                # error code for "multiple instances found"
-                return -2
+            if not unsafe:
+                next_result = buf.find(addr.to_bytes(4, 'big'), result + 4)
+
+                found_dupe = False
+                if next_result != -1:
+                    found_dupe = True
+                    if verbose:
+                        print(f'Warning: found duplicate address {hex(addr)} at offset {hex(result)}')
+
+                while next_result != -1:
+                    if verbose:
+                        print(f'Warning: found duplicate address {hex(addr)} at offset {hex(next_result)}')
+                    next_result = buf.find(addr.to_bytes(4, 'big'), next_result + 4)
+
+                if found_dupe:
+                    # error code for "multiple instances found"
+                    return -2
 
     return result
 
 
-def patch_eboot(eboot, patched_eboot, json_file, verbose, update, unsafe, align_value, encoding):
+def patch_eboot(eboot, patched_eboot, json_file, update, unsafe, align_value, encoding):
     global segments
     global program_start
+    global verbose
 
     with open(eboot, 'rb') as f:
         elf = BinaryReader(f.read(), big_endian=True, encoding=encoding)
@@ -218,7 +235,7 @@ def patch_eboot(eboot, patched_eboot, json_file, verbose, update, unsafe, align_
             else:
                 address = strings[i]['address']
         elif prev_address == -1:
-            print(f'Skipped string {i} because its address was not given: {print_string}')
+            print(f'Warning: skipped string {i} because its address was not given: {print_string}')
             continue
         else:
             # try to get the address by looking for the first null after the previous string
@@ -235,7 +252,7 @@ def patch_eboot(eboot, patched_eboot, json_file, verbose, update, unsafe, align_
                     address = next_address
 
         if address == -1:
-            print(f'Skipped string {i} because its address was not given and could not be found from the previous string: {print_string}')
+            print(f'Warning: skipped string {i} because its address was not given and could not be found from the previous string: {print_string}')
             continue
 
         prev_address = address
@@ -244,11 +261,11 @@ def patch_eboot(eboot, patched_eboot, json_file, verbose, update, unsafe, align_
         pointer = find_pointer(buffer, address, unsafe)
 
         if pointer == -1:
-            print(f'Warning: skipped string {i} because its address ({address}) was not found: {print_string}')
+            print(f'Warning: skipped string {i} because its address ({hex(address)}) was not found: {print_string}')
             continue
         elif pointer == -2:
             # only returned if unsafe is false
-            print(f'Warning: skipped string {i} because its address was found multiple times: {print_string}')
+            print(f'Warning: skipped string {i} because its address ({hex(address)}) was found multiple times: {print_string}')
             continue
 
         current_pos = elf.pos()
@@ -260,7 +277,7 @@ def patch_eboot(eboot, patched_eboot, json_file, verbose, update, unsafe, align_
         elf.align(8)
 
         if verbose:
-            print(f'Patched string {i} at {address}: {print_string}')
+            print(f'Patched string {i} at {hex(address)}: {print_string}')
 
     # write the elf
     with elf.seek_to(0x28):
@@ -285,6 +302,8 @@ def patch_eboot(eboot, patched_eboot, json_file, verbose, update, unsafe, align_
 
 
 def main():
+    global verbose
+
     print(f'Eboot String Patcher v{__version__}')
     print(f'By {__author__}\n')
 
@@ -328,6 +347,8 @@ def main():
     patched_eboot = args.output
     json_file = args.json
 
+    verbose = args.verbose
+
     if not patched_eboot:
         patched_eboot = eboot.rsplit('.', 1)[0] + '_PATCHED.ELF'
 
@@ -349,7 +370,7 @@ def main():
 
         print()
 
-    patch_eboot(eboot, patched_eboot, json_file, args.verbose, args.update, args.unsafe, args.align_value, args.encoding)
+    patch_eboot(eboot, patched_eboot, json_file, args.update, args.unsafe, args.align_value, args.encoding)
 
     print('Finished.')
 
