@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 __author__ = 'SutandoTsukai181'
-__version__ = '1.2'
+__version__ = '1.3'
 
 import json
 import os
@@ -46,7 +46,7 @@ segments: List[Segment] = list()
 program_start = 0
 
 
-def find_pointer(buf: bytearray, addr: int, safe: bool) -> int:
+def find_pointer(buf: bytearray, addr: int, unsafe: bool) -> int:
     result = -1
 
     for seg in segments:
@@ -54,14 +54,18 @@ def find_pointer(buf: bytearray, addr: int, safe: bool) -> int:
             addr = addr - seg.file_addr + seg.virt_addr
             result = buf.find(addr.to_bytes(4, 'big'), program_start)
 
-            if safe and buf.find(addr.to_bytes(4, 'big'), result + 4) != -1:
+            # skip unaligned search results
+            while result % 4:
+                result = buf.find(addr.to_bytes(4, 'big'), result + 4)
+
+            if not unsafe and buf.find(addr.to_bytes(4, 'big'), result + 4) != -1:
                 # error code for "multiple instances found"
                 return -2
 
     return result
 
 
-def patch_eboot(eboot, patched_eboot, json_file, verbose, update, safe, align_value, encoding):
+def patch_eboot(eboot, patched_eboot, json_file, verbose, update, unsafe, align_value, encoding):
     global segments
     global program_start
 
@@ -237,13 +241,13 @@ def patch_eboot(eboot, patched_eboot, json_file, verbose, update, safe, align_va
         prev_address = address
 
         # find the pointer to the old string's address
-        pointer = find_pointer(buffer, address, safe)
+        pointer = find_pointer(buffer, address, unsafe)
 
         if pointer == -1:
             print(f'Warning: skipped string {i} because its address ({address}) was not found: {print_string}')
             continue
         elif pointer == -2:
-            # only returned if safe is true
+            # only returned if unsafe is false
             print(f'Warning: skipped string {i} because its address was found multiple times: {print_string}')
             continue
 
@@ -298,8 +302,8 @@ def main():
                         help='show info about each string entry that is patched')
     parser.add_argument('-u', '--update', action='store_true',
                         help='skip adding strings that were added in a previous run (does not check for conflicts)')
-    parser.add_argument('-s', '--safe', action='store_true',
-                        help='skip strings if their address was found multiple times (use this whenever the script breaks the eboot)')
+    parser.add_argument('-s', '--unsafe', action='store_true',
+                        help='patch strings without checking if their address was found multiple times (might provide a slight performance boost)')
     parser.add_argument('-a', '--align-value', dest='align_value', action='store', required=False,
                         help='force alignment of the segment before the empty segment to the value given')
     parser.add_argument('-e', '--encoding', action='store', default='cp936',
@@ -345,7 +349,7 @@ def main():
 
         print()
 
-    patch_eboot(eboot, patched_eboot, json_file, args.verbose, args.update, args.safe, args.align_value, args.encoding)
+    patch_eboot(eboot, patched_eboot, json_file, args.verbose, args.update, args.unsafe, args.align_value, args.encoding)
 
     print('Finished.')
 
