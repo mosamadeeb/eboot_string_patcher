@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 
 __author__ = 'SutandoTsukai181'
-__version__ = '1.1'
+__version__ = '1.2'
 
 import json
 import os
 from argparse import ArgumentParser
-from operator import attrgetter
+from functools import reduce
 from typing import Dict, List
 
 from binary_reader import BinaryReader
@@ -167,13 +167,12 @@ def patch_eboot(eboot, patched_eboot, json_file, verbose, update, safe, align_va
         if empty_seg_index == -1:
             raise Exception('Could not find an empty segment.')
 
-        index_of_max = segments.index(
-            max(segments, key=attrgetter('virt_addr')))
+        max_segment = reduce(lambda x, y: x if x.virt_addr + x.mem_size > y.virt_addr + y.mem_size else y, segments)
 
         align = int(align_value) if align_value else ALIGN_SIZE
 
         # set virtual address of empty segment to start after the end of the last (virtual) segment
-        virtual_address = segments[index_of_max].virt_addr + segments[index_of_max].mem_size
+        virtual_address = max_segment.virt_addr + max_segment.mem_size
         virtual_address += align - (virtual_address % align)
 
         segments[empty_seg_index].virt_addr = virtual_address
