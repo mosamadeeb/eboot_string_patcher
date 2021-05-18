@@ -57,8 +57,8 @@ def find_pointer(buf: bytearray, addr: int, unsafe: bool) -> int:
             result = buf.find(addr.to_bytes(4, 'big'), program_start)
 
             # skip unaligned search results
-            while result % 4:
-                result = buf.find(addr.to_bytes(4, 'big'), result + 4)
+            while result % 4 and result != -1:
+                result = buf.find(addr.to_bytes(4, 'big'), result + 4 - (result % 4))
 
             if not unsafe:
                 next_result = buf.find(addr.to_bytes(4, 'big'), result + 4)
