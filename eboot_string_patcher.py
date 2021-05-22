@@ -9,7 +9,7 @@ from argparse import ArgumentParser
 from functools import reduce
 from typing import Dict, List
 
-from binary_reader import BinaryReader
+from binary_reader import *
 
 
 class Segment:
@@ -60,7 +60,7 @@ def find_pointer(buf: bytearray, addr: int, unsafe: bool) -> int:
             while result % 4 and result != -1:
                 result = buf.find(addr.to_bytes(4, 'big'), result + 4 - (result % 4))
 
-            if not unsafe:
+            if not unsafe and result != -1:
                 next_result = buf.find(addr.to_bytes(4, 'big'), result + 4)
 
                 found_dupe = False
@@ -87,7 +87,7 @@ def patch_eboot(eboot, patched_eboot, json_file, update, unsafe, align_value, en
     global verbose
 
     with open(eboot, 'rb') as f:
-        elf = BinaryReader(f.read(), big_endian=True, encoding=encoding)
+        elf = BinaryReader(f.read(), Endian.BIG, encoding)
 
     print(f'Reading {json_file}...')
     with open(json_file, 'r', encoding=encoding) as j:
@@ -123,9 +123,9 @@ def patch_eboot(eboot, patched_eboot, json_file, update, unsafe, align_value, en
         for i in range(program_header_entry_count):
             seg = Segment()
 
-            elf.seek(3, whence=1)
+            elf.seek(3, Whence.CUR)
             seg.loadable = elf.read_uint8() == 1
-            elf.seek(3, whence=1)
+            elf.seek(3, Whence.CUR)
             seg.readable = elf.read_uint8() & 4 != 0
 
             seg.file_addr = elf.read_uint64()
@@ -133,7 +133,7 @@ def patch_eboot(eboot, patched_eboot, json_file, update, unsafe, align_value, en
 
             if elf.read_uint64() != seg.virt_addr:
                 print(f'Warning: skipped segment {i} because physical address did not match virtual address.')
-                elf.seek(8 * 3, whence=1)
+                elf.seek(8 * 3, Whence.CUR)
                 continue
 
             seg.file_size = elf.read_uint64()
@@ -287,7 +287,7 @@ def patch_eboot(eboot, patched_eboot, json_file, update, unsafe, align_value, en
     segment.mem_size = segment.file_size
 
     with elf.seek_to(program_header + (program_header_entry_size * empty_seg_index)):
-        elf.seek(8, whence=1)
+        elf.seek(8, Whence.CUR)
         elf.write_uint64(segment.file_addr)
         elf.write_uint64(segment.virt_addr)
         elf.write_uint64(segment.virt_addr)
